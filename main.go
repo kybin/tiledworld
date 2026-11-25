@@ -194,6 +194,14 @@ func (l *Layer) TileAt(p image.Point) *Tile {
 	return l.Map[p]
 }
 
+func (l *Layer) ImageAt(p image.Point) *ebiten.Image {
+	t := l.Map[p]
+	if t == nil {
+		return nil
+	}
+	return t.Image
+}
+
 func (l *Layer) TilePoses(tile *Tile) []image.Point {
 	pts := make([]image.Point, 0)
 	for pt, t := range l.Map {
@@ -522,9 +530,10 @@ func normalModeUpdate(g *Game, w *Widget) error {
 				defer f.Close()
 				b := image.Rect(0, 0, tileSize, tileSize)
 				tileImg := image.NewRGBA(b)
-				for _, t := range m.TilesAt(m.Pos) {
-					if t != nil {
-						draw.Draw(tileImg, b, t.Image, image.Pt(0, 0), draw.Over)
+				for _, l := range m.World.Layers {
+					img := l.ImageAt(m.Pos)
+					if img != nil {
+						draw.Draw(tileImg, b, img, image.Pt(0, 0), draw.Over)
 					}
 				}
 				err = png.Encode(f, tileImg)
@@ -573,12 +582,13 @@ func normalModeSlotsDraw(g *Game, w *Widget) {
 		// draw slot image itself
 		slotImage.Clear()
 		if pos != nil {
-			for _, t := range m.TilesAt(*pos) {
-				if t != nil {
+			for _, l := range m.World.Layers {
+				img := l.ImageAt(*pos)
+				if img != nil {
 					op := ebiten.DrawImageOptions{}
 					op.GeoM.Scale(2, 2)
 					op.GeoM.Translate(1, 1) // for outline
-					slotImage.DrawImage(t.Image, &op)
+					slotImage.DrawImage(img, &op)
 				}
 			}
 		}
@@ -798,14 +808,14 @@ func worldViewDraw(g *Game, w *Widget) {
 	for _, l := range layers {
 		for j := int(camRect.Min.Y) - 1; j < int(camRect.Max.Y)+1; j++ {
 			for i := int(camRect.Min.X) - 1; i < int(camRect.Max.X)+1; i++ {
-				tile, ok := l.Map[image.Pt(i, j)]
-				if !ok {
+				img := l.ImageAt(image.Pt(i, j))
+				if img == nil {
 					continue
 				}
 				op := ebiten.DrawImageOptions{}
 				op.GeoM.Translate((float64(i)-float64(camRect.Min.X))*tileSize, (float64(j)-float64(camRect.Min.Y))*tileSize)
 				op.GeoM.Concat(toScreen)
-				screen.DrawImage(tile.Image, &op)
+				screen.DrawImage(img, &op)
 			}
 		}
 	}
@@ -838,11 +848,11 @@ func worldViewDraw(g *Game, w *Widget) {
 		}
 		charImg := ebiten.NewImage(tileSize, tileSize)
 		for _, l := range g.CharMode.World.Layers {
-			tile, ok := l.Map[image.Pt(imgPos.X, imgPos.Y)]
-			if !ok {
+			img := l.ImageAt(image.Pt(imgPos.X, imgPos.Y))
+			if img == nil {
 				continue
 			}
-			charImg.DrawImage(tile.Image, &drawOverOp)
+			charImg.DrawImage(img, &drawOverOp)
 		}
 		drawAtCursorOp := drawOverOp
 		drawAtCursorOp.GeoM.Translate(float64(vp.X-camRect.Min.X)*tileSize, float64(vp.Y-camRect.Min.Y)*tileSize)
@@ -916,15 +926,15 @@ func activeTileLayersDraw(g *Game, w *Widget) {
 			{X: x2, Y: y2},
 		}
 		for _, tp := range tps {
-			t := l.TileAt(tp)
-			if t == nil {
+			img := l.ImageAt(tp)
+			if img == nil {
 				continue
 			}
 			op := ebiten.DrawImageOptions{}
 			op.GeoM.Translate(0, float64((7-i)*tileSize))
 			op.GeoM.Translate((float64(x2)-p.X)*tileSize, (float64(y2)-p.Y)*tileSize)
 			op.GeoM.Concat(toScreen)
-			screen.DrawImage(t.Image, &op)
+			screen.DrawImage(img, &op)
 		}
 	}
 	// draw cursor
